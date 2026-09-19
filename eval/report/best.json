@@ -1,0 +1,12 @@
+{
+  "final_score": 1.0,
+  "run_dir": "C:\\Users\\User\\Downloads\\for my own (ai shipping documentation verification)\\eval\\report\\run_20260918T161240_offline",
+  "saved_at": "2026-09-18T16:12:41.001695+00:00",
+  "stage1_macro_f1": 1.0,
+  "stage3_defect_f1": 1.0,
+  "end_to_end": {
+    "success": 46,
+    "total": 46,
+    "rate": 1.0
+  }
+}
