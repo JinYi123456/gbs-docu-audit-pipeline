@@ -5,3 +5,6 @@ pydantic
 pdfplumber
 google-genai
 python-multipart
+# ★ Railway 必需：/health 的 sdk_installed、云端读写分支（_supabase_ready）都靠它点亮；
+#   没装时所有 Supabase 路径被关闭，/api/emails 直接 503（2026-09-19 排障实录）。
+supabase>=2.6,<3
