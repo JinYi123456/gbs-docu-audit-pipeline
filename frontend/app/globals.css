@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  @apply bg-slate-100 text-slate-900 antialiased;
+}
+
+/* 长文本（邮件正文、地址）用等宽小字更好核对 */
+.mono-cell {
+  @apply font-mono text-[12px] leading-5 break-words;
+}
+
+.card {
+  @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+}
+
+.pill {
+  @apply inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold;
+}
+
+.btn {
+  @apply inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5
+         text-xs font-medium text-slate-700 transition hover:bg-slate-50
+         disabled:cursor-not-allowed disabled:opacity-40;
+}
+
+.btn-dark {
+  @apply border-slate-900 bg-slate-900 text-white hover:bg-slate-800;
+}
+
+/*
+ * Header controls share one geometry so the right-hand cluster reads as a single
+ * horizontal line: identical height, radius, padding and type scale. Previously they mixed
+ * `.btn` (py-1.5 text-xs) with `.pill` (py-0.5 text-[11px]), which left the row visibly jagged.
+ *
+ * Note: Tailwind's preflight sets `border-style: solid; border-width: 0`, so every rule here
+ * must re-declare the border width/colour explicitly (a bare `rounded-md border` renders no border).
+ */
+.header-control {
+  @apply inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md border border-slate-300
+         bg-white px-3 text-xs font-medium leading-none text-slate-700 transition
+         hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40;
+}
+
+.header-control-dark {
+  @apply border-slate-900 bg-slate-900 text-white hover:bg-slate-800;
+}
+
+.header-control-muted {
+  @apply border-slate-200 bg-white text-slate-600;
+}
+
+/*
+ * 演示用的"呈现节奏"动画。
+ * 注意区分：动画只决定**何时**把结论摆出来，绝不编造结论本身 ——
+ * 文字与数值全部来自后端返回的真实字段。
+ */
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.step-in {
+  animation: step-in 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes card-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.card-pop {
+  animation: card-pop 320ms ease-out both;
+}
+
+@keyframes flash-row {
+  0% {
+    background-color: rgb(16 185 129 / 0.18);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.flash-row {
+  animation: flash-row 1.4s ease-out both;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}

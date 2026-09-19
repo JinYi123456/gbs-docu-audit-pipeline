@@ -1,0 +1,79 @@
+# ============================================================================
+# SDOC Hackathon 2026 · SI vs BL 智能校验 —— 仓库护栏
+#
+# ★ 最高优先级：以下三类内容绝不能进 GitHub
+#   1. 官方答案键 ground_truth.json（藏在 sdoc-hackathon-docker.zip 里）
+#   2. 两个官方 zip（内含答案键 + 数百个附件）
+#   3. 任何 .env（含 SUPABASE_SERVICE_ROLE_KEY / GEMINI_API_KEY）
+#
+# 提交前必跑自查（一条都不能漏）：
+#   git ls-files | grep -Ei 'ground_truth|\.zip$|\.env$' && echo "!! 泄漏 !!" || echo "干净"
+#   git check-ignore -v eval/private/ground_truth.json data/inbox/email_001.json
+# ============================================================================
+
+# ---------- 1. 官方答案键与官方分发包（红线，永不入库） ----------
+official-zips/
+*.zip
+ground_truth.json
+**/ground_truth.json
+ground_truth*.json
+
+# ---------- 2. 官方数据集与评分服务（bootstrap 可再生的本地产物） ----------
+# 注意：必须写成 data/* 而不是 data/。
+# 若写 data/，git 根本不会进入该目录，后面的 ! 反排除会失效，.gitkeep 放不进去。
+data/*
+!data/.gitkeep
+server/*
+!server/.gitkeep
+
+# ---------- 3. 密钥与本地配置 ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ---------- 4. 评测产物（含答案键派生物与跑批快照） ----------
+eval/private/
+eval/generator/
+eval/holdout/
+eval/report/
+.cache/
+
+# ---------- 5. Python ----------
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# ---------- 6. Node / Next.js ----------
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+.pnpm-store/
+
+# ---------- 7. 编辑器与系统 ----------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- 8. 预览/开发服务的运行日志 ----------
+# 注意要写成 *.log* —— PowerShell 的 Start-Process 要求 stdout/stderr 落到两个不同文件，
+# 实际产物是 preview.log 与 preview.log.err，只写 *.log 会漏掉后者。
+.freebuff/*.log*
+.freebuff/*.pid

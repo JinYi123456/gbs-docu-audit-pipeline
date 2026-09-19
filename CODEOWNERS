@@ -1,0 +1,40 @@
+# SDOC Hackathon 2026 · 4 人并行零冲突归属表
+#
+# A · 分类与编排      B · 入料与抽取        C · 比对与评测        D · 数据与前端
+# 规则：只改自己名下的路径；冻结件（★）任何改动都必须走 PR 并 @ 全部 4 人。
+
+# ★ 冻结件：接口契约 / 配置 / 数据库 schema
+/backend/app/contracts.py          @A @B @C @D
+/backend/app/config.py             @A @B @C @D
+/db/migrations/                    @C @D
+/backend/app/llm/prompts/          @A @B
+
+# A —— 分类与编排
+/backend/app/pipeline/classify.py       @A
+/backend/app/pipeline/verdict.py        @A
+/backend/app/runner.py                  @A
+/backend/app/main.py                    @A
+/backend/app/api/routes_pipeline.py     @A
+
+# B —— 入料与抽取
+/backend/app/ingest/                    @B
+/backend/app/llm/                       @B
+/backend/app/pipeline/extract.py        @B
+/backend/app/pipeline/normalize.py      @B
+/backend/app/pipeline/rule_extract.py   @B
+
+# C —— 比对与评测
+/backend/app/pipeline/compare.py        @C
+/backend/app/pipeline/policy.py         @C
+/eval/                                  @C
+/backend/tests/                         @C
+
+# D —— 数据与前端
+/frontend/                              @D
+/backend/app/db/                        @D
+/backend/app/api/routes_review.py       @D
+
+# 基础设施与文档：全员共同所有
+/scripts/    @A @B @C @D
+/docs/       @A @B @C @D
+/Makefile    @A @B @C @D
