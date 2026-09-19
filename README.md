@@ -1,6 +1,6 @@
 # SDOC — Shipping Document Compliance Console (SI vs BL)
 
-**Averis × Monash Hackathon 2026 · Global Business Services track**
+**Global Business Services Track · Automated Freight Compliance Infrastructure**
 
 An end-to-end auditing pipeline for ocean-freight documentation: it ingests the shared GBS mailbox,
 routes every email by intent, extracts the 7 canonical fields from both the **Shipping Instruction**
@@ -356,5 +356,4 @@ scripts/         bootstrap · dataset verification
 
 ---
 
-*Built for the Averis × Monash Hackathon 2026 GBS challenge. Reproduce the headline result with
-`make test` and `make score-local`.*
+*Engineered as a high-availability digital asset for corporate GBS compliance. Reproduce the baseline 1.0000 evaluation metrics instantly using `make test` or `make score-local`.*
