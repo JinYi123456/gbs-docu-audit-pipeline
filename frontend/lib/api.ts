@@ -9,8 +9,12 @@
  *  3. **绝不放密钥**：前端只与自己的 BFF 说话；service-role key 永远在后端进程里。
  */
 
+/**
+ * API 基准网址：构建时由 Next.js 内联注入 NEXT_PUBLIC_API_BASE（Vercel → Railway），
+ * 本地开发缺省回落 localhost:8000。同一份代码兼容两种环境，绝无第二处硬编码。
+ */
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ?? "http://localhost:8000";
+  (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000").replace(/\/$/, "");
 
 export interface ApiFailure {
   ok: false;
@@ -31,8 +35,10 @@ export interface ApiSuccess<T> {
 export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
 
 // 只在**真的连不上**时才显示（正常演示看不到）：给运维一句可执行的指引，不暴露内部路径。
+// 真连不上才显示：第一行带上前端实际尝试的 API 地址，现场排障一眼定位是"指错地址"还是"后端挂了"。
 const OFFLINE_HINT =
-  `Realtime services are unreachable. Start the verification API and retry:\n` +
+  `Realtime services are unreachable — console could not reach ${API_BASE}.\n` +
+  `Start the verification API and retry:\n` +
   `  cd backend && python -m uvicorn app.main:app --port 8000`;
 
 async function request<T>(
