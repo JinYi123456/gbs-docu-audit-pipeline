@@ -542,6 +542,84 @@ async def afetch_submission(
     return await asyncio.to_thread(fetch_submission, gateway, limit=limit)
 
 
+def fetch_emails_page(
+    *,
+    email_ids: Sequence[str] | None = None,
+    gateway: Gateway | None = None,
+) -> dict[str, dict[str, Any]]:
+    """读取 emails 表的审计展示行（subject/from/附件名 + 权威结论）。
+
+    这是「云端审计页」的数据源：API 层据此在**没有本地快照**的环境
+    （例如 Railway 容器里没有官方 data/ 目录）仍然能渲染完整工作台。
+
+    附件只回传**文件名**（与本地快照的展示口径一致），不回传路径——
+    路径在云端容器里无意义，泄露内部目录结构也没有任何价值。
+    `email_ids` 提供时只取这些行（详情端点用），否则全量（列表端点用）。
+    """
+    gw = gateway or get_gateway()
+    rows: list[dict[str, Any]] = []
+    page = 1000
+    if email_ids:
+        ids = list(dict.fromkeys(email_ids))          # 去重且保持顺序
+        for start in range(0, len(ids), page):
+            batch = gw.run(
+                lambda c=ids[start:start + page]: _execute(
+                    gw.table(TABLE_EMAILS)
+                    .select("email_id,subject,from_addr,attachment_paths,category,status,"
+                            "has_defect,defect_fields,review_reason,manual_category,manual_status,"
+                            "manual_review_reason,manual_defect_fields,classified_by")
+                    .in_("email_id", c)),
+                label="fetch_emails_page")
+            rows.extend(batch)
+    else:
+        offset = 0
+        while True:
+            batch = gw.run(
+                lambda o=offset: _execute(
+                    gw.table(TABLE_EMAILS)
+                    .select("email_id,subject,from_addr,attachment_paths,category,status,"
+                            "has_defect,defect_fields,review_reason,manual_category,manual_status,"
+                            "manual_review_reason,manual_defect_fields,classified_by")
+                    .order("email_id").range(o, o + page - 1)),
+                label="fetch_emails_page")
+            rows.extend(batch)
+            if len(batch) < page:
+                break
+            offset += page
+
+    emails: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        overridden = row.get("manual_status") is not None or row.get("manual_category") is not None
+        emails[str(row.get("email_id"))] = {
+            "email_id": str(row.get("email_id")),
+            "subject": row.get("subject") or "",
+            "from": row.get("from_addr") or "",
+            "attachments": [str(path).rsplit("/", 1)[-1]
+                            for path in (row.get("attachment_paths") or [])],
+            "attachment_count": len(row.get("attachment_paths") or []),
+            "category": row.get("category") or "GENERAL",
+            "status": row.get("status") or "OK",
+            "has_defect": bool(row.get("has_defect")),
+            "defect_fields": sorted(set(row.get("defect_fields") or [])),
+            "review_reason": row.get("review_reason"),
+            "manual_category": row.get("manual_category"),
+            "manual_status": row.get("manual_status"),
+            "manual_review_reason": row.get("manual_review_reason"),
+            "manual_defect_fields": sorted(set(row.get("manual_defect_fields") or [])),
+            "decided_by": row.get("classified_by") or "rule",
+            "overridden": overridden,
+        }
+    return emails
+
+
+async def afetch_emails_page(
+    *,
+    email_ids: Sequence[str] | None = None,
+    gateway: Gateway | None = None,
+) -> dict[str, dict[str, Any]]:
+    return await asyncio.to_thread(fetch_emails_page, email_ids=email_ids, gateway=gateway)
+
+
 def validate_submission(
     submission: Mapping[str, Mapping[str, Any]],
     *,

@@ -13,7 +13,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -30,7 +32,7 @@ except ModuleNotFoundError as exc:      # pragma: no cover
 from .config import (
     DEFAULT_DASHBOARD_PATH, DEFAULT_REPORT_DIR, SUBMISSION_KEYS, gemini_api_key_available,
 )
-from .dashboard import load_dashboard
+from .dashboard import FIELD_LABELS, REASON_LABELS, load_dashboard
 from .db.repo import strip_diagnostics
 from .pipeline.normalize import COMPARE_FIELDS
 
@@ -51,20 +53,105 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # 数据源：Supabase 优先，本地快照兜底
 # ---------------------------------------------------------------------------
+logger = logging.getLogger("sdoc.api")
+
+
 def _supabase_ready() -> bool:
     from .db.supabase import SupabaseSettings, sdk_available
     return sdk_available() and SupabaseSettings.from_env().configured
 
 
 def _local_dashboard() -> dict[str, Any]:
+    """优先读本地快照；Railway 等无文件环境自动回落到 Supabase 云端审计页。
+
+    云端行与快照同构（email_id/subject/from/attachments/category/status/…），
+    因此下游所有列表/详情/队列端点对数据源无感。字段级并排明细依赖附件原文，
+    云端容器里没有文件，故置空 —— 详情面板会走它现成的「无可比字段」分支。
+    """
     payload = load_dashboard(DEFAULT_DASHBOARD_PATH)
-    if payload is None:
-        raise HTTPException(
-            status_code=503,
-            detail="No verification snapshot available yet. Generate one with "
-                   "`python -m app.dashboard`, or configure the Supabase environment "
-                   "variables to read the cloud data source instead.")
-    return payload
+    if payload is not None:
+        return payload
+    if _supabase_ready():
+        try:
+            cloud = _cloud_emails_page()
+            if cloud:
+                return {
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "summary": {}, "roi": {},
+                    "field_labels": FIELD_LABELS, "reason_labels": REASON_LABELS,
+                    "emails": [_cloud_effective(cloud[key]) for key in sorted(cloud)],
+                    "source": "supabase",
+                }
+        except Exception as exc:      # noqa: BLE001 —— 云端失败继续走 503 提示
+            logger.warning("云端审计页读取失败，退回 503：%s", exc)
+    raise HTTPException(
+        status_code=503,
+        detail="No verification snapshot available yet. Generate one with "
+               "`python -m app.dashboard`, or configure the Supabase environment "
+               "variables to read the cloud data source instead.")
+
+
+def _cloud_emails_page() -> dict[str, dict[str, Any]]:
+    """云端审计页的同步取数入口（FastAPI 的 def 路由跑在线程池里，不能 await）。"""
+    from .db.repo import fetch_emails_page
+    return fetch_emails_page()
+
+
+def _cloud_effective(row: dict[str, Any]) -> dict[str, Any]:
+    """把 emails 表的原始行合并成"展示有效值"（人工改判优先，与 submission_view 同口径）。
+
+    列表 / 详情 / 云端回放三处共用，保证任何一个入口看到的结论都一致。
+    manual_* 原始键保留在结果里，供 "decided_by" 与轨迹标注使用。
+    """
+    manual = row.get("manual_status")
+    status = manual or row.get("status") or "OK"
+    defect_fields = sorted(set((row.get("manual_defect_fields") if manual
+                                else row.get("defect_fields")) or []))
+    return {**row,
+            "category": row.get("manual_category") or row.get("category") or "GENERAL",
+            "status": status,
+            "has_defect": status == "MISMATCH" and bool(defect_fields),
+            "defect_fields": defect_fields,
+            "review_reason": (row.get("manual_review_reason") if manual
+                              else row.get("review_reason"))}
+
+
+def _cloud_email_detail(email_id: str) -> dict[str, Any] | None:
+    """云端单封详情：结构对齐本地快照条目，字段级并排明细置空。
+
+    列表/详情的字段名与 `dashboard.build_dashboard` 的快照条目一致，
+    前端两套面板对数据源无感。
+    """
+    if not _supabase_ready():
+        return None
+    try:
+        from .db.repo import fetch_emails_page
+        rows = fetch_emails_page(email_ids=[email_id])
+    except Exception as exc:      # noqa: BLE001
+        logger.warning("云端邮件详情读取失败 %s：%s", email_id, exc)
+        return None
+    row = rows.get(email_id)
+    if row is None:
+        return None
+    row = _cloud_effective(row)
+    return {
+        "email_id": row["email_id"],
+        "from": row["from"],
+        "subject": row["subject"],
+        "body": "(email body is not exposed in the cloud audit page)",
+        "attachments": row["attachments"],
+        "attachment_count": row["attachment_count"],
+        "category": row["category"],
+        "status": row["status"],
+        "has_defect": row["has_defect"],
+        "defect_fields": row["defect_fields"],
+        "review_reason": row["review_reason"],
+        "review_reason_label": REASON_LABELS.get(row["review_reason"] or "", None),
+        "decided_by": "manual" if row["manual_status"] else row["decided_by"],
+        "rule_name": None, "category_confidence": None, "body_hint": None,
+        "si": None, "bl": None, "fields": [],
+        "trace": [], "trace_skipped_agents": [], "trace_total_ms": 0,
+    }
 
 
 def _load_overrides() -> dict[str, dict[str, Any]]:
@@ -416,9 +503,6 @@ async def stream_pull(
     from .ingest.inbox import InboxSource
     from .stream import pull_once, reset_cursor
 
-    if reset:
-        reset_cursor()
-
     client = None
     llm_allowed = bool(use_llm and gemini_api_key_available())
     if llm_allowed:
@@ -430,11 +514,96 @@ async def stream_pull(
             client = None
 
     source = InboxSource("data", data_dir=resolve_data_dir(None))
+    try:
+        source.emails()
+    except Exception as exc:      # noqa: BLE001 —— 云端容器没有 data/inbox，回落云端回放
+        logger.warning("本地邮件源不可用（%s），stream/pull 切换云端回放模式", type(exc).__name__)
+        if not _supabase_ready():
+            raise HTTPException(
+                status_code=503,
+                detail="Live pull needs either the bundled data/inbox on disk or Supabase "
+                       "environment variables; neither is available in this environment.") from exc
+        if reset:
+            reset_cursor()
+        return await _cloud_pull(batch_size=batch_size)
+
+    if reset:
+        reset_cursor()
     batch = await pull_once(source, batch_size=batch_size, client=client, use_llm=llm_allowed)
     payload = batch.as_dict()
     payload["channel"] = "gemini" if llm_allowed else "deterministic"
     payload["read_only"] = True
     return payload
+
+
+async def _cloud_pull(*, batch_size: int) -> dict[str, Any]:
+    """云端回放：真实邮件池来自 Supabase emails 表，逐封结论是**已归档的权威产物**。
+
+    而且云端行本身就带人工改判字段（manual_*），所以回放自动展示改判后的最终结论
+    —— 演示改判闭环时，公网上的流式面板会即时反映人审结果。
+
+    红线约束与本地 pull_once 一致：只读不写、不重跑管线（容器里没有附件字节，
+    重跑只会产出误导性的 NEEDS_REVIEW）。游标复用 stream.StreamCursor，
+    环状取片语义与本地模式逐字一致。
+    """
+    import asyncio
+    from itertools import cycle
+
+    from .agents.base import AgentStep, ROLE_JUDGE, ROLE_TRIAGE, ROLE_VERIFIER
+    from .db.repo import fetch_emails_page
+    from .stream import CURSOR, StreamItem
+
+    rows = await asyncio.to_thread(fetch_emails_page)
+    if not rows:
+        raise HTTPException(status_code=503, detail="Supabase returned no emails to replay.")
+
+    # 池子与本地口径一致：有附件的 BL 对照任务，按 email_id 稳定排序
+    pool_ids = sorted(
+        email_id for email_id, row in rows.items()
+        if row["attachment_count"] > 0 and row["category"] == "BL_COMPARISON"
+    )
+    if not pool_ids:
+        raise HTTPException(status_code=503, detail="No comparable BL emails in the cloud pool.")
+
+    size = max(1, min(int(batch_size), 24))
+    start = CURSOR.advance(size, len(pool_ids))
+    rotated = list(cycle(pool_ids))
+    window = rotated[start:start + size]
+    started = time.perf_counter()
+
+    items: list[dict[str, Any]] = []
+    defect_count = 0
+    for email_id in window:
+        row = _cloud_effective(rows[email_id])
+        # 云端回放的轨迹：triage/verifier 汇总真实归档结论，extractor 标注回放模式
+        trace = [
+            AgentStep(agent="triage", role=ROLE_TRIAGE,
+                      summary=f"Archived category {row['category']} from the official pipeline run").as_dict(),
+            AgentStep(agent="extractor", role="extractor",
+                      summary="Cloud replay — archived extraction is authoritative (no attachment bytes on server)").as_dict(),
+            AgentStep(agent="verifier", role=ROLE_VERIFIER,
+                      summary=(f"Archived verdict {row['status']}"
+                               + (f" on {', '.join(row['defect_fields'])}" if row["defect_fields"] else ""))).as_dict(),
+            AgentStep(agent="escalation_judge", role=ROLE_JUDGE,
+                      summary=(f"Manually reviewed ({row['manual_status']})" if row["manual_status"]
+                               else (f"Escalated: {row['review_reason']}" if row["review_reason"]
+                                     else "No escalation needed"))).as_dict(),
+        ]
+        defect_count += 1 if row["has_defect"] else 0
+        items.append(StreamItem(
+            email_id=email_id, subject=row["subject"], from_addr=row["from"],
+            attachments=row["attachments"], category=row["category"], status=row["status"],
+            has_defect=row["has_defect"], defect_fields=row["defect_fields"],
+            review_reason=row["review_reason"],
+            duration_ms=0, trace=trace).as_dict())
+
+    return {
+        "items": items, "cursor": CURSOR.position, "pool_size": len(pool_ids),
+        "batch_size": len(items), "duration_ms": int((time.perf_counter() - started) * 1000),
+        "defect_count": defect_count,
+        "channel": "cloud-replay", "read_only": True,
+        "source": "supabase",
+    }
 
 
 @app.get("/api/emails", summary="Audit queue with filtering and pagination")
@@ -482,6 +651,13 @@ def get_email(email_id: str) -> dict[str, Any]:
     for email in dashboard["emails"]:
         if email["email_id"] == email_id:
             return {"email": email, "submission": _record_from_local(email, overrides),
+                    "override": overrides.get(email_id),
+                    "field_labels": dashboard.get("field_labels", {})}
+    if dashboard.get("source") == "supabase":
+        detail = _cloud_email_detail(email_id)
+        if detail is not None:
+            return {"email": detail,
+                    "submission": _record_from_local(detail, overrides),
                     "override": overrides.get(email_id),
                     "field_labels": dashboard.get("field_labels", {})}
     raise HTTPException(status_code=404, detail=f"没有这封邮件：{email_id}")
