@@ -71,6 +71,7 @@ def _local_dashboard() -> dict[str, Any]:
     payload = load_dashboard(DEFAULT_DASHBOARD_PATH)
     if payload is not None:
         return payload
+    fallback_reason = ""
     if _supabase_ready():
         try:
             cloud = _cloud_emails_page()
@@ -83,12 +84,14 @@ def _local_dashboard() -> dict[str, Any]:
                     "source": "supabase",
                 }
         except Exception as exc:      # noqa: BLE001 —— 云端失败继续走 503 提示
-            logger.warning("云端审计页读取失败，退回 503：%s", exc)
+            fallback_reason = f"{type(exc).__name__}: {exc}"
+            logger.warning("云端审计页读取失败，退回 503：%s", fallback_reason)
     raise HTTPException(
         status_code=503,
-        detail="No verification snapshot available yet. Generate one with "
-               "`python -m app.dashboard`, or configure the Supabase environment "
-               "variables to read the cloud data source instead.")
+        detail=("No verification snapshot available yet. Generate one with "
+                "`python -m app.dashboard`, or configure the Supabase environment "
+                "variables to read the cloud data source instead."
+                + (f" [cloud read failed: {fallback_reason}]" if fallback_reason else "")))
 
 
 def _cloud_emails_page() -> dict[str, dict[str, Any]]:
@@ -553,7 +556,12 @@ async def _cloud_pull(*, batch_size: int) -> dict[str, Any]:
     from .db.repo import fetch_emails_page
     from .stream import CURSOR, StreamItem
 
-    rows = await asyncio.to_thread(fetch_emails_page)
+    try:
+        rows = await asyncio.to_thread(fetch_emails_page)
+    except Exception as exc:      # noqa: BLE001 —— 把真实异常带给调用方，而不是裸 500
+        raise HTTPException(
+            status_code=503,
+            detail=f"Cloud replay failed: {type(exc).__name__}: {exc}") from exc
     if not rows:
         raise HTTPException(status_code=503, detail="Supabase returned no emails to replay.")
 
