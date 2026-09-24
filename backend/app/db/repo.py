@@ -565,7 +565,7 @@ def fetch_emails_page(
             batch = gw.run(
                 lambda c=ids[start:start + page]: _execute(
                     gw.table(TABLE_EMAILS)
-                    .select("email_id,subject,from_addr,attachment_paths,category,status,"
+                    .select("email_id,subject,from_addr,attachment_paths,category,verdict_status,"
                             "has_defect,defect_fields,review_reason,manual_category,manual_status,"
                             "manual_review_reason,manual_defect_fields,classified_by")
                     .in_("email_id", c)),
@@ -577,7 +577,7 @@ def fetch_emails_page(
             batch = gw.run(
                 lambda o=offset: _execute(
                     gw.table(TABLE_EMAILS)
-                    .select("email_id,subject,from_addr,attachment_paths,category,status,"
+                    .select("email_id,subject,from_addr,attachment_paths,category,verdict_status,"
                             "has_defect,defect_fields,review_reason,manual_category,manual_status,"
                             "manual_review_reason,manual_defect_fields,classified_by")
                     .order("email_id").range(o, o + page - 1)),
@@ -598,7 +598,7 @@ def fetch_emails_page(
                             for path in (row.get("attachment_paths") or [])],
             "attachment_count": len(row.get("attachment_paths") or []),
             "category": row.get("category") or "GENERAL",
-            "status": row.get("status") or "OK",
+            "status": row.get("verdict_status") or "OK",
             "has_defect": bool(row.get("has_defect")),
             "defect_fields": sorted(set(row.get("defect_fields") or [])),
             "review_reason": row.get("review_reason"),
