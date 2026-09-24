@@ -64,7 +64,7 @@ class OrchestratorResult:
 class VerificationOrchestrator:
     def __init__(self, agents: Sequence[Agent]) -> None:
         if not agents:
-            raise ValueError("至少需要一个 Agent")
+            raise ValueError("at least one agent is required")
         self.agents = list(agents)
 
     async def run(self, state: PipelineState) -> OrchestratorResult:

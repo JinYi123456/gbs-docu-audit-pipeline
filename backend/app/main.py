@@ -80,7 +80,7 @@ def _local_dashboard() -> dict[str, Any]:
                     "generated_at": datetime.now(timezone.utc).isoformat(),
                     "summary": {}, "roi": {},
                     "field_labels": FIELD_LABELS, "reason_labels": REASON_LABELS,
-                    "emails": [_cloud_effective(cloud[key]) for key in sorted(cloud)],
+                    "emails": [_cloud_row_to_detail(cloud[key]) for key in sorted(cloud)],
                     "source": "supabase",
                 }
         except Exception as exc:      # noqa: BLE001 —— 云端失败继续走 503 提示
@@ -119,23 +119,12 @@ def _cloud_effective(row: dict[str, Any]) -> dict[str, Any]:
                               else row.get("review_reason"))}
 
 
-def _cloud_email_detail(email_id: str) -> dict[str, Any] | None:
-    """云端单封详情：结构对齐本地快照条目，字段级并排明细置空。
+def _cloud_row_to_detail(row: dict[str, Any]) -> dict[str, Any]:
+    """云端行 → 与本地快照条目同构的详情结构（字段级明细在云端模式置空）。
 
-    列表/详情的字段名与 `dashboard.build_dashboard` 的快照条目一致，
-    前端两套面板对数据源无感。
+    列表 / 详情 / _local_dashboard 云端分支三处共用：前端 FieldDiff 等组件
+    直接读 `email.fields.length`，缺键就是崩溃 —— 所以云端行必须先补全形状。
     """
-    if not _supabase_ready():
-        return None
-    try:
-        from .db.repo import fetch_emails_page
-        rows = fetch_emails_page(email_ids=[email_id])
-    except Exception as exc:      # noqa: BLE001
-        logger.warning("云端邮件详情读取失败 %s：%s", email_id, exc)
-        return None
-    row = rows.get(email_id)
-    if row is None:
-        return None
     row = _cloud_effective(row)
     return {
         "email_id": row["email_id"],
@@ -151,10 +140,28 @@ def _cloud_email_detail(email_id: str) -> dict[str, Any] | None:
         "review_reason": row["review_reason"],
         "review_reason_label": REASON_LABELS.get(row["review_reason"] or "", None),
         "decided_by": "manual" if row["manual_status"] else row["decided_by"],
+        # 改判标记必须穿过形状转换：列表端点靠它画 "overridden" 徽章
+        "overridden": bool(row.get("overridden")),
         "rule_name": None, "category_confidence": None, "body_hint": None,
         "si": None, "bl": None, "fields": [],
         "trace": [], "trace_skipped_agents": [], "trace_total_ms": 0,
     }
+
+
+def _cloud_email_detail(email_id: str) -> dict[str, Any] | None:
+    """云端单封详情：结构对齐本地快照条目，字段级并排明细置空。"""
+    if not _supabase_ready():
+        return None
+    try:
+        from .db.repo import fetch_emails_page
+        rows = fetch_emails_page(email_ids=[email_id])
+    except Exception as exc:      # noqa: BLE001
+        logger.warning("云端邮件详情读取失败 %s：%s", email_id, exc)
+        return None
+    row = rows.get(email_id)
+    if row is None:
+        return None
+    return _cloud_row_to_detail(row)
 
 
 def _load_overrides() -> dict[str, dict[str, Any]]:
@@ -648,7 +655,9 @@ def list_emails(
             "defect_fields": record["defect_fields"],
             "review_reason": record["review_reason"],
             "attachments": email["attachments"],
-            "overridden": email["email_id"] in overrides,
+            # 本地快照条目没有 overridden 键 → 回落旧口径（只看本地 overrides 文件）；
+            # 云端行自带 manual_* 改判标记 → 与本地文件取或，徽章两种来源都认。
+            "overridden": bool(email.get("overridden")) or email["email_id"] in overrides,
         })
     return {"total": len(items), "limit": limit, "offset": offset,
             "items": items[offset:offset + limit]}
@@ -670,7 +679,7 @@ def get_email(email_id: str) -> dict[str, Any]:
                     "submission": _record_from_local(detail, overrides),
                     "override": overrides.get(email_id),
                     "field_labels": dashboard.get("field_labels", {})}
-    raise HTTPException(status_code=404, detail=f"没有这封邮件：{email_id}")
+    raise HTTPException(status_code=404, detail=f"No such email: {email_id}")
 
 
 @app.get("/api/review-queue", summary="Human review queue, ordered by priority")
@@ -750,7 +759,7 @@ def submission() -> dict[str, Any]:
     for email_id, record in result.items():
         extra = set(record) - SUBMISSION_KEYS
         if extra:
-            problems.append(f"{email_id}: 多余键 {sorted(extra)}")
+            problems.append(f"{email_id}: extra keys {sorted(extra)}")
     return {"count": len(result), "problems": problems[:20], "submission": result}
 
 

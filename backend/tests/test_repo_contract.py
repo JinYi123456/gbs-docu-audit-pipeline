@@ -151,7 +151,7 @@ def test_validate_submission_flags_missing_keys() -> None:
                                                   "review_reason": None, "has_defect": False,
                                                   "defect_fields": []}},
                                    expected_ids=["email_001", "email_002"])
-    assert problems and "缺少" in problems[0], problems
+    assert problems and "missing" in problems[0], problems
 
 
 def test_missing_supabase_degrades_gracefully() -> None:

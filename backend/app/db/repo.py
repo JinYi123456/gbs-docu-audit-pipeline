@@ -207,9 +207,9 @@ def comparison_row(row: Mapping[str, Any]) -> dict[str, Any]:
     }
     out = {key: _json_safe(value) for key, value in row.items() if key in allowed}
     if "email_id" not in out or "field_name" not in out:
-        raise RepoError(f"comparison 行缺少主键：{sorted(row)}")
+        raise RepoError(f"comparison row missing primary key: {sorted(row)}")
     if out.get("match_method") is None:
-        raise RepoError("comparison 行缺少 match_method（SQL 上有 check 约束）")
+        raise RepoError("comparison row missing match_method (SQL CHECK constraint)")
     reason = out.get("needs_human_reason")
     if reason is not None and reason not in REVIEW_REASONS:
         out["needs_human_reason"] = None      # 脏理由绝不允许写库（枚举会拒收）
@@ -255,10 +255,10 @@ def validate_units(units: Sequence[PipelineUnit]) -> list[str]:
             problems.append(f"{unit.email.email_id}: {problem}")
         for extraction in unit.extractions:
             if extraction.doc_type not in ("SI", "BL"):
-                problems.append(f"{extraction.email_id}: 非法 doc_type={extraction.doc_type!r}")
+                problems.append(f"{extraction.email_id}: invalid doc_type={extraction.doc_type!r}")
         for row in unit.comparisons:
             if row.get("field_name") not in COMPARE_FIELDS:
-                problems.append(f"{unit.email.email_id}: 非法字段名 {row.get('field_name')!r}")
+                problems.append(f"{unit.email.email_id}: invalid field name {row.get('field_name')!r}")
         if len(problems) > 40:
             break
     return problems
@@ -302,7 +302,7 @@ async def upsert_verification_pipeline_results(
     if validate:
         problems = validate_units(units)
         if problems:
-            raise RepoError("载荷违反官方 5 键合约，拒绝写库：" + "; ".join(problems[:5]))
+            raise RepoError("payload violates the official 5-key contract, refusing to write: " + "; ".join(problems[:5]))
 
     gw = gateway or get_gateway()
     try:
@@ -432,10 +432,10 @@ def record_upload_run(
 ) -> dict[str, Any]:
     """把一次上传核对写入云端（幂等 upsert）。云端不可用时抛 SupabaseUnavailable。"""
     if status not in ("OK", "MISMATCH", "NEEDS_REVIEW"):
-        raise RepoError(f"非法 status={status!r}")
+        raise RepoError(f"invalid status={status!r}")
     invalid = sorted(set(defect_fields) - set(COMPARE_FIELDS))
     if invalid:
-        raise RepoError(f"非法字段名 {invalid}")
+        raise RepoError(f"invalid field names {invalid}")
     reason = review_reason if review_reason in REVIEW_REASONS else None
     row = {
         "run_id": run_id,
@@ -632,14 +632,14 @@ def validate_submission(
         missing = sorted(expected - set(submission))
         extra = sorted(set(submission) - expected)
         if missing:
-            problems.append(f"缺少 {len(missing)} 个 email_id（官方把缺失键当 GENERAL 记罚）："
+            problems.append(f"missing {len(missing)} email_id(s) (official scoring counts missing keys as GENERAL): "
                             f"{missing[:5]}")
         if extra:
-            problems.append(f"多出 {len(extra)} 个未知 email_id：{extra[:5]}")
+            problems.append(f"extra {len(extra)} unknown email_id(s): {extra[:5]}")
     for email_id, record in submission.items():
         extra_keys = set(record) - SUBMISSION_KEYS - {"decided_by"}
         if extra_keys:
-            problems.append(f"{email_id}: 多余键 {sorted(extra_keys)}（官方只认 5 键）")
+            problems.append(f"{email_id}: extra keys {sorted(extra_keys)} (official accepts exactly 5 keys)")
         for problem in validate_record(dict(record)):
             problems.append(f"{email_id}: {problem}")
         if len(problems) > 40:
@@ -668,10 +668,10 @@ def apply_manual_verdict(
 ) -> dict[str, Any]:
     """调用 RPC 写回人工结论。校验在 SQL 端再走一遍，前端无法绕过。"""
     if status not in ("OK", "MISMATCH", "NEEDS_REVIEW"):
-        raise RepoError(f"非法 status={status!r}")
+        raise RepoError(f"invalid status={status!r}")
     invalid = sorted(set(defect_fields) - set(COMPARE_FIELDS))
     if invalid:
-        raise RepoError(f"非法字段名 {invalid}，只能取自 7 个 canonical 字段")
+        raise RepoError(f"invalid field names {invalid}; allowed: the 7 canonical fields")
     gw = gateway or get_gateway()
     payload = {
         "p_email_id": email_id,

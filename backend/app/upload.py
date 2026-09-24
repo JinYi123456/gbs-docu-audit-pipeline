@@ -106,7 +106,7 @@ class MemorySource:
         basename = Path(attachment_path).name
         if basename in self._by_basename:
             return self._by_basename[basename]
-        raise FileNotFoundError(f"上传件不存在：{attachment_path}")
+        raise FileNotFoundError(f"uploaded attachment not found: {attachment_path}")
 
 
 def _safe_name(name: str) -> str:

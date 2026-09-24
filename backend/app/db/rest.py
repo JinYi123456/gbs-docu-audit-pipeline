@@ -236,7 +236,7 @@ class RestGateway(Gateway):
                 f"REST 通道需要 httpx（pip install httpx）：{exc}") from exc
         url = self.settings.url.rstrip("/")
         if not url.startswith(("http://", "https://")):
-            raise SupabaseUnavailable(f"SUPABASE_URL 不是合法地址：{url!r}")
+            raise SupabaseUnavailable(f"SUPABASE_URL is not a valid URL: {url!r}")
         # service-role key 只出现在服务端进程的请求头里，绝不进前端、绝不进日志
         headers = {
             "apikey": self.settings.service_role_key,
@@ -320,5 +320,5 @@ if __name__ == "__main__":  # pragma: no cover —— 自检：无网络、无 S
     except SupabaseUnavailable as exc:
         assert "未配置" in str(exc)
     else:      # pragma: no cover
-        raise AssertionError("未配置时必须抛 SupabaseUnavailable")
+        raise AssertionError("must raise SupabaseUnavailable when unconfigured")
     print("rest.py self-test OK：PostgREST 通道装配正确（未联网）")

@@ -309,7 +309,7 @@ async def classify_email(
         from ..llm.prompts import versions
         return ClassificationResult(
             email_id=email.email_id, category=CATEGORY_GENERAL, confidence=0.3,
-            decided_by="rule", evidence_span="(无规则命中且 LLM 未启用)",
+            decided_by="rule", evidence_span="(no rule matched and LLM disabled)",
             attachment_expectation=attachment_expectation(email), intent=flags,
             rule_name="fallback:general", prompt_version=versions()["classify"],
             error="llm_disabled",

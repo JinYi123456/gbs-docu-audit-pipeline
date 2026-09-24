@@ -98,8 +98,8 @@ class InboxSource:
             inbox_dir = self.data_dir / "inbox"
             if not inbox_dir.is_dir():
                 raise InboxError(
-                    f"找不到 {inbox_dir}。先跑 `make bootstrap` 解出官方 data/ 目录，"
-                    "或用 INBOX_SOURCE=http://localhost:8080 走 Docker。"
+                    f"inbox directory not found: {inbox_dir}. Run `make bootstrap` to unpack "
+                    "the official data/ bundle, or set INBOX_SOURCE to an HTTP inbox service."
                 )
             payload = [json.loads(path.read_text(encoding="utf-8"))
                        for path in sorted(inbox_dir.glob("email_*.json"))]
@@ -117,7 +117,7 @@ class InboxSource:
                 json.loads(self._http_get(f"{self.source}/emails/{email_id}")))
         path = self.data_dir / "inbox" / f"{email_id}.json"
         if not path.is_file():
-            raise InboxError(f"没有这封邮件：{email_id}")
+            raise InboxError(f"no such email: {email_id}")
         return InboxEmail.from_raw(json.loads(path.read_text(encoding="utf-8")))
 
     # -- 附件 ----------------------------------------------------------------
@@ -132,7 +132,7 @@ class InboxSource:
     # -- 提交 ----------------------------------------------------------------
     def submit(self, submission: dict[str, Any]) -> dict[str, Any]:
         if not self.is_http:
-            raise InboxError("submit() 需要 HTTP 源（先 docker compose up --build）")
+            raise InboxError("submit() requires an HTTP source (start the inbox service first, e.g. docker compose up --build)")
         request = urllib.request.Request(
             self.source + "/submit",
             data=json.dumps(submission).encode("utf-8"),

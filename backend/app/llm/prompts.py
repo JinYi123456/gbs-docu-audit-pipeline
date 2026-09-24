@@ -20,7 +20,7 @@ PROMPT_VERSION: str = os.environ.get("PROMPT_VERSION", "v3")
 def _read(filename: str) -> str:
     path = PROMPT_DIR / filename
     if not path.is_file():
-        raise FileNotFoundError(f"提示词文件缺失：{path}")
+        raise FileNotFoundError(f"prompt file missing: {path}")
     return path.read_text(encoding="utf-8")
 
 

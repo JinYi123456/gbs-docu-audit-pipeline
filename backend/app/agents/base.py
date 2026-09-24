@@ -112,7 +112,7 @@ class Agent(abc.ABC):
             step = await self.execute(state)
         except Exception as exc:      # noqa: BLE001 —— 单 Agent 失败不中断整条链
             step = AgentStep(agent=self.name, role=self.role,
-                             summary=f"执行失败，按证据不足继续：{type(exc).__name__}")
+                             summary=f"Agent failed, continuing with insufficient evidence: {type(exc).__name__}")
             error = f"{type(exc).__name__}: {exc}"[:300]
         step.agent = step.agent or self.name
         step.role = step.role or self.role

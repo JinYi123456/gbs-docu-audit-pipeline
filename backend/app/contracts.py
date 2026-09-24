@@ -73,9 +73,9 @@ def validate_record(record: dict[str, Any]) -> list[str]:
     problems: list[str] = []
     keys = set(record)
     if keys - SUBMISSION_KEYS - {"decided_by"}:
-        problems.append(f"多余键 {sorted(keys - SUBMISSION_KEYS - {'decided_by'})}")
+        problems.append(f"extra keys {sorted(keys - SUBMISSION_KEYS - {'decided_by'})}")
     if not SUBMISSION_KEYS.issubset(keys):
-        problems.append(f"缺少键 {sorted(SUBMISSION_KEYS - keys)}")
+        problems.append(f"missing keys {sorted(SUBMISSION_KEYS - keys)}")
         return problems
 
     category = record["category"]
@@ -85,28 +85,28 @@ def validate_record(record: dict[str, Any]) -> list[str]:
     fields = list(record["defect_fields"] or [])
 
     if category not in CATEGORIES:
-        problems.append(f"非法 category={category!r}")
+        problems.append(f"invalid category={category!r}")
     if status not in STATUSES:
-        problems.append(f"非法 status={status!r}")
+        problems.append(f"invalid status={status!r}")
     if reason is not None and reason not in REVIEW_REASONS:
-        problems.append(f"非法 review_reason={reason!r}")
+        problems.append(f"invalid review_reason={reason!r}")
 
     # 官方口径：三种状态互斥且完备（与 PostgreSQL 的 sdoc_verdict_shape_chk 同义）
     if status == "MISMATCH":
         if not has_defect or not fields:
-            problems.append("MISMATCH 必须 has_defect=true 且 defect_fields 非空")
+            problems.append("MISMATCH requires has_defect=true and non-empty defect_fields")
         if reason is not None:
-            problems.append("MISMATCH 不允许携带 review_reason")
+            problems.append("MISMATCH must not carry review_reason")
     elif status == "OK":
         if has_defect or fields:
-            problems.append("OK 不允许携带缺陷")
+            problems.append("OK must not carry defects")
         if reason is not None:
-            problems.append("OK 不允许携带 review_reason")
+            problems.append("OK must not carry review_reason")
     elif status == "NEEDS_REVIEW":
         if has_defect or fields:
-            problems.append("NEEDS_REVIEW 不允许携带缺陷")
+            problems.append("NEEDS_REVIEW must not carry defects")
         if reason is None:
-            problems.append("NEEDS_REVIEW 必须给出 review_reason")
+            problems.append("NEEDS_REVIEW requires review_reason")
     return problems
 
 

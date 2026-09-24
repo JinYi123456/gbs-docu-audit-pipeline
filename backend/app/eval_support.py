@@ -29,7 +29,7 @@ def _load_official_scoring(scoring_path: Path | None = None) -> Any:
             f"找不到官方打分器 {path}。跑 `make bootstrap`（或解压 docker 包）后重试。")
     spec = importlib.util.spec_from_file_location("sdoc_official_scoring", path)
     if spec is None or spec.loader is None:
-        raise ScoringUnavailable(f"无法加载官方打分器 {path}")
+        raise ScoringUnavailable(f"failed to load the official scorer at {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

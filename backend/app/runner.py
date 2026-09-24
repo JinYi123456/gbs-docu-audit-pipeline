@@ -171,14 +171,14 @@ def process_email_deterministic(
     if classification is None:
         classification = ClassificationResult(
             email_id=email.email_id, category=CATEGORY_GENERAL, confidence=0.3,
-            decided_by="rule", evidence_span="(无规则命中)", rule_name="fallback:general",
+            decided_by="rule", evidence_span="(no rule matched)", rule_name="fallback:general",
             error="llm_disabled")
 
     if classification.category != CATEGORY_BL_COMPARISON:
         return _record(classification.category,
                        PolicyOutcome(status="OK", has_defect=False, defect_fields=(),
                                      review_reason=None, needs_review_queue=False,
-                                     rationale="非对照类邮件")), classification
+                                     rationale="not a comparison email")), classification
 
     if email.attachment_count == 0:
         # 0 附件：没有可比对对象，交给 policy 按正文证据裁决
@@ -214,7 +214,7 @@ async def process_email(
     if classification.category != CATEGORY_BL_COMPARISON:
         outcome = PolicyOutcome(status="OK", has_defect=False, defect_fields=(),
                                 review_reason=None, needs_review_queue=False,
-                                rationale="非对照类邮件，无需比对")
+                                rationale="not a comparison email; no comparison needed")
         return _record(classification.category, outcome), classification, None, outcome, None
 
     if email.attachment_count == 0:
@@ -433,7 +433,7 @@ def _dump_outputs(
         if len(problems) >= 10:
             break
     if problems:
-        raise ValueError("产物违反官方 5 键合约：" + "; ".join(problems[:5]))
+        raise ValueError("submission violates the official 5-key contract: " + "; ".join(problems[:5]))
 
     config.submission_out.parent.mkdir(parents=True, exist_ok=True)
     config.submission_out.write_text(

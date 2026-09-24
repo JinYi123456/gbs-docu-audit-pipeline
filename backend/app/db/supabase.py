@@ -163,8 +163,8 @@ class Gateway:
                 last_error = exc
                 continue
             except Exception as exc:  # noqa: BLE001
-                raise SupabaseUnavailable(f"Supabase 建连失败：{exc}") from exc
-        raise SupabaseUnavailable(f"Supabase 建连失败（参数不兼容）：{last_error}")
+                raise SupabaseUnavailable(f"Supabase connection failed: {exc}") from exc
+        raise SupabaseUnavailable(f"Supabase connection failed (incompatible parameters): {last_error}")
 
     # -- 表 / RPC -----------------------------------------------------------
     def table(self, name: str, *, schema: str | None = None) -> Any:
@@ -195,7 +195,7 @@ class Gateway:
                 logger.warning("%s 第 %d 次失败（%s），%.2fs 后重试：%s",
                                label, attempt, type(exc).__name__, delay, exc)
                 time.sleep(delay)
-        raise SupabaseUnavailable(f"{label} 重试耗尽：{last}")
+        raise SupabaseUnavailable(f"{label} retries exhausted: {last}")
 
     async def arun(self, operation: Callable[[], T], *, label: str = "supabase") -> T:
         """异步包装：把同步 SDK 调用挪到线程池，绝不阻塞事件循环。

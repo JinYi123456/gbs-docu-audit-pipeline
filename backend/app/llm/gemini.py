@@ -197,7 +197,7 @@ class GeminiSettings:
         source = env if env is not None else dict(os.environ)
         api_key = (source.get("GEMINI_API_KEY") or source.get("GOOGLE_API_KEY") or "").strip()
         if not api_key:
-            raise GeminiConfigError("缺少 GEMINI_API_KEY（或 GOOGLE_API_KEY）")
+            raise GeminiConfigError("missing GEMINI_API_KEY (or GOOGLE_API_KEY)")
 
         def _int(name: str, default: int) -> int:
             try:
@@ -329,7 +329,7 @@ class GeminiClient:
             from google import genai
             from google.genai import types
         except ImportError as exc:      # pragma: no cover
-            raise GeminiConfigError("未安装 google-genai，请 `pip install google-genai`") from exc
+            raise GeminiConfigError("google-genai is not installed; run `pip install google-genai`") from exc
         if self._client is None:
             self._client = genai.Client(api_key=self._settings.api_key)
         return self._client, types
@@ -538,7 +538,7 @@ class GeminiClient:
             candidates.remove(model)
             candidates.insert(0, model)
         if not candidates:
-            raise GeminiConfigError("模型候选链为空：检查 GEMINI_*_CANDIDATES 配置")
+            raise GeminiConfigError("model candidate chain is empty; check GEMINI_*_CANDIDATES config")
 
         payload_for_cache = list(cache_payload) if cache_payload is not None else [
             getattr(item, "text", None) or str(item) for item in contents
@@ -670,14 +670,14 @@ class GeminiClient:
             return parsed
         text = (getattr(response, "text", None) or "").strip()
         if not text:
-            raise GeminiSchemaError("响应为空（可能是 max_output_tokens 被思考 token 吃光）")
+            raise GeminiSchemaError("empty response (possibly consumed by thinking tokens; raise GEMINI_MAX_OUTPUT_TOKENS)")
         text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.MULTILINE).strip()
         try:
             payload = json.loads(text)
         except json.JSONDecodeError as exc:
-            raise GeminiSchemaError(f"响应不是合法 JSON：{text[:200]}") from exc
+            raise GeminiSchemaError(f"response is not valid JSON: {text[:200]}") from exc
         if not isinstance(payload, dict):
-            raise GeminiSchemaError(f"响应不是 JSON 对象：{text[:200]}")
+            raise GeminiSchemaError(f"response is not a JSON object: {text[:200]}")
         return payload
 
     @staticmethod

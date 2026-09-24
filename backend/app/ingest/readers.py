@@ -84,12 +84,12 @@ def read_document(source: InboxSource, attachment_path: str) -> DocumentText:
         data = source.read_bytes(attachment_path)
     except Exception as exc:  # noqa: BLE001
         return DocumentText(path=attachment_path, mime=mime, text="", is_readable=False,
-                            read_error=f"读取失败：{type(exc).__name__}: {exc}")
+                            read_error=f"read failed: {type(exc).__name__}: {exc}")
 
     size = len(data)
     if size == 0:
         return DocumentText(path=attachment_path, mime=mime, text="", is_readable=False,
-                            read_error="空文件（0 字节）", size_bytes=0)
+                            read_error="empty file (0 bytes)", size_bytes=0)
 
     try:
         if extension in TEXT_EXTENSIONS:
@@ -104,15 +104,15 @@ def read_document(source: InboxSource, attachment_path: str) -> DocumentText:
             return _finalize(attachment_path, mime, _docx_text(data), size, "docx", data)
         if extension in LEGACY_OFFICE_EXTENSIONS:
             return DocumentText(path=attachment_path, mime=mime, text="", is_readable=False,
-                                read_error=f"不支持的老格式 {extension}（需先转 PDF/DOCX）",
+                                read_error=f"legacy format {extension} not supported (convert to PDF/DOCX first)",
                                 size_bytes=size, raw_bytes=data)
     except Exception as exc:  # noqa: BLE001
         return DocumentText(path=attachment_path, mime=mime, text="", is_readable=False,
-                            read_error=f"解析失败：{type(exc).__name__}: {exc}",
+                            read_error=f"parse failed: {type(exc).__name__}: {exc}",
                             size_bytes=size, raw_bytes=data)
 
     return DocumentText(path=attachment_path, mime=mime, text="", is_readable=False,
-                        read_error=f"未知附件类型 {extension or '(无扩展名)'}",
+                        read_error=f"unknown attachment type {extension or '(no extension)'}",
                         size_bytes=size, raw_bytes=data)
 
 
@@ -132,7 +132,7 @@ def _finalize(
         # 有字节但抽不出文本 —— 典型的图片型扫描件（无文本层）
         return DocumentText(
             path=path, mime=mime, text=cleaned, is_readable=False,
-            read_error="文件中无可用文本层（疑似图片型扫描件，需 OCR）",
+            read_error="no usable text layer in file (likely an image-only scan; OCR required)",
             page_count=page_count, reader=reader, size_bytes=size,
             text_sha256=digest, table_lines=lines, raw_bytes=raw)
     return DocumentText(
@@ -184,7 +184,7 @@ def _decode_pdf_stream(body: bytes, head: bytes) -> bytes:
         elif b"ASCIIHex" in name:
             payload = bytes.fromhex(payload.decode("ascii").strip().rstrip(">"))
         else:
-            raise ValueError(f"不支持的 PDF 过滤器 {name!r}")
+            raise ValueError(f"unsupported PDF filter {name!r}")
     return payload
 
 
@@ -388,7 +388,7 @@ def _docx_text(data: bytes) -> str:
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         name = "word/document.xml"
         if name not in archive.namelist():
-            raise ValueError("docx 结构异常：缺少 word/document.xml")
+            raise ValueError("malformed docx: missing word/document.xml")
         xml = archive.read(name).decode("utf-8", errors="replace")
     return _docx_xml_text(xml)
 
