@@ -550,7 +550,6 @@ async def _cloud_pull(*, batch_size: int) -> dict[str, Any]:
     环状取片语义与本地模式逐字一致。
     """
     import asyncio
-    from itertools import cycle
 
     from .agents.base import AgentStep, ROLE_JUDGE, ROLE_TRIAGE, ROLE_VERIFIER
     from .db.repo import fetch_emails_page
@@ -574,9 +573,12 @@ async def _cloud_pull(*, batch_size: int) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail="No comparable BL emails in the cloud pool.")
 
     size = max(1, min(int(batch_size), 24))
-    start = CURSOR.advance(size, len(pool_ids))
-    rotated = list(cycle(pool_ids))
-    window = rotated[start:start + size]
+    pool_size = len(pool_ids)
+    start = CURSOR.advance(size, pool_size)
+    # 环状取片：模数索引实现，与本地 pull_once 的环绕语义一致。
+    # ★ 绝不能用 list(cycle(pool_ids)) —— cycle 是无限迭代器，物化成列表会
+    #   直接把容器内存打爆（Railway 上表现为边缘 502，实测踩过）。
+    window = [pool_ids[(start + offset) % pool_size] for offset in range(size)]
     started = time.perf_counter()
 
     items: list[dict[str, Any]] = []
